@@ -1,0 +1,39 @@
+FROM centos
+MAINTAINER LONGLONG zmleasy@gmail.com
+RUN yum groupinstall "Development Tools" "Development Libraries" -y
+RUN yum install gcc gcc-c++ autoconf automake zlib zlib-devel openssl openssl-devel pcre* -y
+ADD http://download.war.lifebook.xin/pcre-8.37.tar.bz2 .
+RUN tar xf pcre-8.37.tar.bz2 -C /usr/local/src/
+ADD http://download.war.lifebook.xin/nginx-1.9.4.tar.gz .
+RUN tar xf nginx-1.9.4.tar.gz
+RUN cd nginx-1.9.4 && ./configure --prefix=/usr/local/nginx --with-http_dav_module --with-http_stub_status_module --with-http_addition_module --with-http_sub_module --with-http_flv_module --with-http_mp4_module --with-pcre=/usr/local/src/pcre-8.37 --with-http_gzip_static_module && make && make install
+RUN useradd -M -u 8001 -s /sbin/nologin nginx
+EXPOSE 80
+RUN yum -y install cmake ncurses-devel
+ADD http://download.war.lifebook.xin/mysql-5.6.26.tar.gz .
+RUN useradd -M -u 8002 -s /sbin/nologin mysql
+RUN tar xf mysql-5.6.26.tar.gz
+RUN cd mysql-5.6.26 && cmake -DCMAKE_INSTALL_PREFIX=/usr/local/mysql -DMYSQL_UNIX_ADDR=/tmp/mysql.sock -DDEFAULT_CHARSET=utf8 -DDEFAULT_COLLATION=utf8_general_ci -DWITH_EXTRA_CHARSETS=all -DWITH_MYISAM_STORAGE_ENGINE=1 -DWITH_INNOBASE_STORAGE_ENGINE=1 -DWITH_MEMORY_STORAGE_ENGINE=1 -DWITH_READLINE=1 -DENABLED_LOCAL_INFILE=1 -DMYSQL_DATADIR=/usr/local/mysql/data -DMYSQL-USER=mysql && make && make install
+RUN cd && chown -R mysql:mysql /usr/local/mysql/
+RUN cp /usr/local/mysql/support-files/my-default.cnf /etc/my.cnf && cp /usr/local/mysql/support-files/mysql.server /etc/init.d/mysqld
+RUN sed -i '46s/basedir=/&\/usr\/local\/mysql/' /etc/init.d/mysqld && sed -i '47s/datadir=/&\/usr\/local\/mysql\/data/' /etc/init.d/mysqld
+RUN chkconfig mysqld on
+RUN /usr/local/mysql/scripts/mysql_install_db --user=mysql --basedir=/usr/local/mysql/ --datadir=/usr/local/mysql/data/ --defaults-file=/etc/my.cnf
+RUN ln -s /usr/local/mysql/bin/* /bin/
+EXPOSE 3306
+RUN yum -y install php-pear
+ADD http://download.war.lifebook.xin/libmcrypt-2.5.8.tar.bz2 .
+RUN tar xf libmcrypt-2.5.8.tar.bz2 -C /usr/local/src/ && cd /usr/local/src/libmcrypt-2.5.8/ && ./configure --prefix=/usr/local/libmcrypt ; make ; make install
+RUN yum install -y libxml2-devel libcurl-devel libjpeg-devel libpng-devel freetype freetype-devel
+RUN echo '/usr/local/libmcrypt/lib' >> /etc/ld.so.conf && echo '/usr/local/mysql/lib' >> /etc/ld.so.conf
+RUN ldconfig && echo 'ldconfig' >> /etc/rc.local
+ADD http://download.war.lifebook.xin/php-5.6.13.tar.bz2 .
+RUN tar xf php-5.6.13.tar.bz2
+RUN cd php-5.6.13 && ./configure --prefix=/usr/local/php --with-config-file-path=/usr/local/php --with-mysql=/usr/local/mysql --with-mysqli=/usr/local/mysql/bin/mysql_config --with-iconv-dir --with-freetype-dir --with-jpeg-dir --with-png-dir --with-zlib --with-libxml-dir=/usr --enable-xml --disable-rpath --enable-bcmath --enable-shmop --enable-sysvsem --enable-inline-optimization --with-curl --enable-mbregex --enable-fpm --enable-mbstring --with-gd --enable-gd-native-ttf --with-openssl --with-mhash --enable-pcntl --enable-sockets --with-xmlrpc --enable-zip --enable-soap --with-mcrypt=/usr/local/libmcrypt && make && make install
+RUN cp /php-5.6.13/php.ini-production /usr/local/php/php.ini
+RUN cp /usr/local/php/etc/php-fpm.conf.default /usr/local/php/etc/php-fpm.conf
+RUN cp /php-5.6.13/sapi/fpm/init.d.php-fpm /etc/init.d/php-fpm
+RUN chmod +x /etc/init.d/php-fpm
+RUN chkconfig php-fpm on
+RUN yum -y install net-tools openssh-server
+ADD start.sh /usr/local/bin/start.sh
